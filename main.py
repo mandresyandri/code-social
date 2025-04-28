@@ -473,6 +473,7 @@ def compile_results_with_meta(all_codes: List[Dict[str, Any]],
         meta_theme = meta_theme_map.get(meta_id, 'Non classé')
         
         rows.append({
+            'Méta-thème': meta_theme,
             'Thème': theme, 
             'Code': code, 
             'Extrait': excerpt
@@ -553,12 +554,12 @@ def run_pipeline(pdf_path: str, output_path: str = 'resultats_analyse.csv', max_
         logger.info(f"Résultats sauvegardés dans {output_path}")
         
         # Affichage des statistiques
-        # meta_themes_count = len(set(df['Méta-thème']))
+        meta_themes_count = len(set(df['Méta-thème']))
         themes_count = len(set(df['Thème']))
         codes_count = len(df)
         
         print(f"\nRésultats de l'analyse qualitative:")
-        # print(f"- {meta_themes_count} méta-thèmes")
+        print(f"- {meta_themes_count} méta-thèmes")
         print(f"- {themes_count} thèmes")
         print(f"- {codes_count} codes")
         
@@ -569,7 +570,7 @@ def run_pipeline(pdf_path: str, output_path: str = 'resultats_analyse.csv', max_
         
         # Afficher le tableau complet (limité à 20 premières lignes pour la console)
         print("\nAperçu des résultats:")
-        print(df.head().to_markdown(index=False))
+        print(df.head(20).to_markdown(index=False))
         
         return df
         
