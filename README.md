@@ -53,10 +53,10 @@ GROQ_API_KEY=your_api_key_here
 ```mermaid
 graph TD
     A[PDF d'entretien] --> B[Extraction du texte]
-    B --> C[Nettoyage]
-    C --> D[Segmentation en blocs \~1200 mots]
-    D --> E[Codification sociologique - LLM few-shot]
-    E --> F[Validation des extraits par un juge]
+    B --> C[Nettoyage du texte]
+    C --> D[Segmentation en chunks \~1200 mots]
+    D --> E[LLM few-shot prompting 1 - Codification sociologique]
+    E --> F[LLM AS A JUDGE CoT 2 - Validation des extraits]
     F --> G[Clustering sémantique en thèmes]
     G --> H[Attribution des noms de thèmes]
     H --> I{Plus de 10 thèmes ?}
