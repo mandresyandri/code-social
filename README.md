@@ -54,12 +54,12 @@ GROQ_API_KEY=your_api_key_here
 graph TD
     A[PDF d'entretien] --> B[Extraction du texte]
     B --> C[Nettoyage]
-    C --> D[Segmentation en blocs (~1200 mots)]
-    D --> E[Codification sociologique (LLM few-shot)]
-    E --> F[Validation des extraits par un "juge"]
+    C --> D[Segmentation en blocs \~1200 mots]
+    D --> E[Codification sociologique - LLM few-shot]
+    E --> F[Validation des extraits par un \"juge\"]
     F --> G[Clustering sémantique en thèmes]
     G --> H[Attribution des noms de thèmes]
-    H --> I{>10 thèmes ?}
+    H --> I{Plus de 10 thèmes ?}
     I -- Oui --> J[Méta-clustering en groupes larges]
     I -- Non --> K[Compilation CSV finale]
     J --> K
