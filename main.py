@@ -136,19 +136,60 @@ def analyze_and_code_segment(client: Groq, model: str, segment: str, max_retries
     Effectue une analyse CoT puis propose jusqu'à 3 codes (JSON).
     Inclut un mécanisme de réessai en cas d'échec.
     """
+    # Construction du prompt avec exemples few-shot et instructions pour extraits longs
     prompt = (
         "Tu es un sociologue du numérique spécialisé en analyse qualitative.\n\n"
         "Étape 1: Analyse ce segment d'entretien en pensant à voix haute pour identifier les idées principales, "
         "y compris les idées implicites, les nuances ou l'ironie.\n\n"
         "Étape 2: Propose jusqu'à 3 codes sociologiques brefs (1-5 mots) accompagnés d'un extrait pertinent. "
         "Chaque code doit refléter un concept sociologique significatif.\n\n"
+        
+        "IMPORTANT: Pour chaque code, tu dois sélectionner un extrait LONG (au moins 15-20 mots ou une phrase complète) "
+        "qui illustre bien le concept. Évite absolument les extraits trop courts (moins de 10 mots). "
+        "L'extrait doit inclure suffisamment de contexte pour être compréhensible seul.\n\n"
+
+        "Voici des exemples de thèmes et codes appropriés avec des extraits LONGS:\n\n"
+        
+        "EXEMPLE 1:\n"
+        "Nom du thème: Un usage stratégique et pédagogique de l'IA générative\n"
+        "Définition: Ce thème désigne l'intégration réfléchie de l'IA générative, en particulier de ChatGPT, dans les pratiques "
+        "académiques des étudiant·es comme outil d'aide à la rédaction, à la compréhension et à la structuration des idées. "
+        "L'usage est perçu comme complémentaire au travail intellectuel, mobilisé de manière ciblée pour dépasser des obstacles.\n"
+        "Exemple verbatim: « le raisonnement que je vais présenter dans un travail, je vais plutôt le faire moi-même et j'ai plutôt "
+        "utilisé ChatGpt pour m'aider pour des choses externes. Genre des biographies, des lectures, tout ça. Parce que je trouve "
+        "que le raisonnement il n'est pas assez fort. »\n"
+        "Codes possibles: [{ \"code\": \"Complémentarité cognitive\", \"excerpt\": \"le raisonnement que je vais présenter dans un travail, je vais plutôt le faire moi-même et j'ai plutôt utilisé ChatGpt pour m'aider pour des choses externes\" }, "
+        "{ \"code\": \"Usage ciblé et délimité\", \"excerpt\": \"utilisé ChatGpt pour m'aider pour des choses externes. Genre des biographies, des lectures, tout ça. Parce que je trouve que le raisonnement il n'est pas assez fort\" }]\n\n"
+        
+        "EXEMPLE 2:\n"
+        "Nom du thème: Un rapport critique à la légitimité académique menant à des tensions éthiques\n"
+        "Définition: Ce thème renvoie à la manière dont les étudiant·es naviguent dans un espace institutionnel marqué par l'incertitude "
+        "normative et le flou des règles entourant l'usage de l'IA générative. Entre méfiance vis-à-vis du plagiat et conscience des risques "
+        "de transgression, les individus développent des stratégies d'auto-régulation.\n"
+        "Exemple verbatim: « ça me brise le cœur de me dire, « bon ce mot est trop beau, il faut que je le mette quelque chose de plus humain, quoi. » »\n"
+        "Codes possibles: [{ \"code\": \"Anxiété normative\", \"excerpt\": \"ça me brise le cœur de me dire, « bon ce mot est trop beau, il faut que je le mette quelque chose de plus humain, quoi. »\" }, "
+        "{ \"code\": \"Camouflage des traces IA\", \"excerpt\": \"ce mot est trop beau, il faut que je mette quelque chose de plus humain, quoi. » Pour que ça fasse plus comme si c'était moi qui l'avais écrit\" }]\n\n"
+        
+        "EXEMPLE 3:\n"
+        "Nom du thème: Une transformation du rapport au savoir et à l'écriture\n"
+        "Définition: Ce thème interroge les effets de l'IA générative sur les manières de concevoir, produire et s'approprier le savoir dans "
+        "le cadre universitaire. L'écriture n'est plus seulement une performance solitaire mais devient un processus dialogique, co-construit "
+        "avec la machine.\n"
+        "Exemple verbatim: « ça change les standards. Avant, on devait tout faire nous-mêmes, du coup au bout d'un moment t'as fait un travail "
+        "pendant 3 semaines, au bout d'un moment t'as envie de le donner, même si c'est pas parfait, les mots utilisés sont pas parfaits, etc. "
+        "Et là, vu qu'on a accès à un contenu de qualité relativement vite, je pense qu'il y a des standards où je me dis que ce n'est pas "
+        "exactement ce que je veux. »\n"
+        "Codes possibles: [{ \"code\": \"Évolution des standards\", \"excerpt\": \"ça change les standards. Avant, on devait tout faire nous-mêmes, du coup au bout d'un moment t'as fait un travail pendant 3 semaines\" }, "
+        "{ \"code\": \"Exigence accrue\", \"excerpt\": \"ça rend le truc plus exigeant parce qu'on a accès à un contenu de qualité relativement vite\" }, "
+        "{ \"code\": \"Temporalité transformée\", \"excerpt\": \"on a accès à un contenu de qualité relativement vite, je pense qu'il y a des standards où je me dis que ce n'est pas exactement ce que je veux\" }]\n\n"
+        
         f"Segment à analyser:\n'''\n{segment}\n'''\n\n"
         "Tu dois répondre UNIQUEMENT en format JSON suivant ce modèle précis:\n"
-        "[{\"code\": \"concept sociologique\", \"excerpt\": \"extrait pertinent\"}, ...]\n"
+        "[{\"code\": \"concept sociologique\", \"excerpt\": \"extrait pertinent d'au moins 15-20 mots ou phrase complète\"}, ...]\n"
     )
-    
+
     messages = [{"role": "user", "content": prompt}]
-    
+
     for attempt in range(max_retries + 1):
         try:
             resp = client.chat.completions.create(
@@ -163,14 +204,33 @@ def analyze_and_code_segment(client: Groq, model: str, segment: str, max_retries
             # Tentative d'extraction du JSON
             codes = extract_json_from_text(text)
             if codes:
-                return codes
+                # Vérification de la longueur des extraits
+                valid_codes = []
+                for code in codes:
+                    if len(code.get('excerpt', '').split()) >= 10:
+                        valid_codes.append(code)
+                    else:
+                        # Rechercher un extrait plus long dans le segment original
+                        short_excerpt = code.get('excerpt', '')
+                        if short_excerpt in segment:
+                            # Trouver la phrase contenant cet extrait
+                            sentences = re.split(r'(?<=[.!?])\s+', segment)
+                            for sentence in sentences:
+                                if short_excerpt in sentence and len(sentence.split()) >= 10:
+                                    code['excerpt'] = sentence.strip()
+                                    valid_codes.append(code)
+                                    break
+                
+                if valid_codes:
+                    return valid_codes
             
-            # Si échec d'extraction, demander une reformulation
+            # Si échec d'extraction ou extraits trop courts, demander une reformulation
             if attempt < max_retries:
                 fix_prompt = (
-                    "Ta réponse précédente n'est pas un JSON valide. "
-                    "Réponds UNIQUEMENT avec un tableau JSON au format: "
-                    "[{\"code\": \"concept sociologique\", \"excerpt\": \"extrait pertinent\"}, ...]\n"
+                    "Ta réponse précédente n'est pas satisfaisante. "
+                    "Assure-toi de fournir un JSON valide avec des EXTRAITS LONGS (minimum 15-20 mots ou phrase complète). "
+                    "Réponds avec un tableau JSON au format: "
+                    "[{\"code\": \"concept sociologique\", \"excerpt\": \"extrait long et pertinent\"}, ...]\n"
                     "N'inclus aucune explication, juste le JSON."
                 )
                 messages = [{"role": "user", "content": prompt}, 
@@ -181,8 +241,8 @@ def analyze_and_code_segment(client: Groq, model: str, segment: str, max_retries
             if attempt == max_retries:
                 logger.error("Échec de l'analyse après plusieurs tentatives")
                 return []
-    
-    logger.warning("Impossible d'obtenir un JSON valide, retour d'une liste vide")
+
+    logger.warning("Impossible d'obtenir un JSON valide ou avec extraits longs, retour d'une liste vide")
     return []
 
 # -----------------------------
@@ -193,28 +253,52 @@ def judge_codes(client: Groq, model: str, segment: str, codes: List[Dict[str, An
     """
     Valide ou corrige chaque code proposé par l'agent.
     Retourne une liste de codes validés/améliorés.
+    S'assure que les extraits sont suffisamment longs.
     """
     if not codes:
         return []
-    
+
     codes_json = json.dumps(codes, ensure_ascii=False)
-    
+
+    # Construction du prompt avec exemples few-shot pour la validation et insistance sur extraits longs
     prompt = (
         "Tu es un expert en sociologie évaluant des codes d'analyse qualitative.\n\n"
         f"Voici un segment d'entretien:\n'''\n{segment}\n'''\n\n"
         f"Et voici les codes proposés:\n{codes_json}\n\n"
-        "Pour chaque code, évalue sa pertinence et sa précision. "
-        "Puis retourne un tableau JSON avec les codes validés ou améliorés, en suivant ce format:\n"
-        "[{\"code\": \"code validé ou amélioré\", \"excerpt\": \"extrait pertinent\"}, ...]\n\n"
+        
+        "CRITÈRE IMPORTANT: Pour chaque code, l'extrait doit être LONG (minimum 15-20 mots ou une phrase complète) "
+        "et contextuel pour être compréhensible isolément. Si un extrait est trop court, tu dois l'étendre en "
+        "cherchant dans le segment original.\n\n"
+        
+        "Voici des exemples de bons codes sociologiques et de leurs extraits pertinents LONGS pour t'inspirer:\n\n"
+        
+        "EXEMPLE 1 - Concernant l'usage de l'IA dans les travaux académiques:\n"
+        "- Code: \"Complémentarité cognitive\" avec extrait: \"le raisonnement que je vais présenter dans un travail, je vais plutôt le faire moi-même et j'ai plutôt utilisé ChatGpt pour m'aider pour des choses externes\"\n"
+        "- Code: \"Usage ciblé et délimité\" avec extrait: \"utilisé ChatGpt pour m'aider pour des choses externes. Genre des biographies, des lectures, tout ça. Parce que je trouve que le raisonnement il n'est pas assez fort\"\n\n"
+        
+        "EXEMPLE 2 - Concernant les tensions éthiques liées à l'IA:\n"
+        "- Code: \"Anxiété normative\" avec extrait: \"ça me brise le cœur de me dire, « bon ce mot est trop beau, il faut que je mette quelque chose de plus humain, quoi. » Pour que ça fasse plus comme si c'était moi qui l'avais écrit\"\n" 
+        "- Code: \"Camouflage des traces IA\" avec extrait: \"ce mot est trop beau, il faut que je mette quelque chose de plus humain, quoi. » Pour que ça fasse plus comme si c'était moi qui l'avais écrit et pas ChatGPT\"\n\n"
+        
+        "EXEMPLE 3 - Concernant la transformation du rapport à l'écriture:\n"
+        "- Code: \"Évolution des standards\" avec extrait: \"ça change les standards. Avant, on devait tout faire nous-mêmes, du coup au bout d'un moment t'as fait un travail pendant 3 semaines\"\n"
+        "- Code: \"Exigence accrue\" avec extrait: \"ça rend le truc plus exigeant parce qu'on a accès à un contenu de qualité relativement vite, je pense qu'il y a des standards plus élevés\"\n"
+        "- Code: \"Temporalité transformée\" avec extrait: \"on a accès à un contenu de qualité relativement vite, je pense qu'il y a des standards où je me dis que ce n'est pas exactement ce que je veux\"\n\n"
+        
+        "Pour chaque code, évalue sa pertinence et sa précision. Vérifie IMPÉRATIVEMENT que l'extrait est suffisamment long. "
+        "Si un extrait est trop court (moins de 15 mots), étends-le en cherchant le contexte dans le segment d'entretien.\n\n"
+        
+        "Retourne un tableau JSON avec les codes validés ou améliorés, en suivant ce format:\n"
+        "[{\"code\": \"code validé ou amélioré\", \"excerpt\": \"extrait pertinent LONG\"}, ...]\n\n"
         "Ton tableau JSON doit être le SEUL élément de ta réponse."
     )
-    
+
     try:
         resp = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
-            max_tokens=512,
+            max_tokens=1024,  # Augmenté pour permettre des extraits plus longs
             stream=False
         )
         content = resp.choices[0].message.content.strip()
@@ -222,12 +306,32 @@ def judge_codes(client: Groq, model: str, segment: str, codes: List[Dict[str, An
         # Extraction du JSON
         validated = extract_json_from_text(content)
         if validated:
-            return validated
+            # Vérifier la longueur des extraits
+            final_codes = []
+            for code in validated:
+                excerpt = code.get('excerpt', '')
+                if len(excerpt.split()) >= 10:
+                    final_codes.append(code)
+                else:
+                    # Chercher un extrait plus long dans le segment
+                    short_excerpt = excerpt
+                    if short_excerpt in segment:
+                        sentences = re.split(r'(?<=[.!?])\s+', segment)
+                        for sentence in sentences:
+                            if short_excerpt in sentence and len(sentence.split()) >= 10:
+                                code['excerpt'] = sentence.strip()
+                                final_codes.append(code)
+                                break
+            
+            if final_codes:
+                return final_codes
         
-        # Si échec, deuxième tentative avec prompt simplifié
+        # Si échec, deuxième tentative avec prompt simplifié mais insistant sur la longueur
         fix_prompt = (
-            "Réformate ta réponse précédente en JSON valide uniquement. "
-            "Format attendu: [{\"code\": \"...\", \"excerpt\": \"...\"}, ...]\n"
+            "Ta réponse précédente n'est pas satisfaisante. "
+            "Je dois absolument avoir des extraits LONGS (15-20 mots minimum ou phrases complètes) pour chaque code. "
+            "Cherche dans le segment original pour étendre les extraits trop courts.\n"
+            "Format attendu: [{\"code\": \"...\", \"excerpt\": \"extrait long d'au moins 15-20 mots\"}, ...]\n"
             "Aucun texte supplémentaire."
         )
         
@@ -239,14 +343,43 @@ def judge_codes(client: Groq, model: str, segment: str, codes: List[Dict[str, An
                 {"role": "user", "content": fix_prompt}
             ],
             temperature=0,
-            max_tokens=512
+            max_tokens=1024
         )
         
         fixed = fix_resp.choices[0].message.content.strip()
         validated = extract_json_from_text(fixed)
         
-        return validated if validated else codes  # Fallback aux codes originaux
-    
+        # Vérifier encore une fois la longueur des extraits
+        if validated:
+            final_codes = []
+            for code in validated:
+                if len(code.get('excerpt', '').split()) >= 10:
+                    final_codes.append(code)
+            
+            if final_codes:
+                return final_codes
+        
+        # Fallback: chercher directement des phrases complètes pour chaque code
+        fallback_codes = []
+        for code in codes:
+            code_text = code.get('code', '')
+            short_excerpt = code.get('excerpt', '')
+            
+            # Rechercher une phrase complète contenant l'extrait court
+            sentences = re.split(r'(?<=[.!?])\s+', segment)
+            for sentence in sentences:
+                if short_excerpt in sentence and len(sentence.split()) >= 10:
+                    fallback_codes.append({
+                        "code": code_text,
+                        "excerpt": sentence.strip()
+                    })
+                    break
+        
+        if fallback_codes:
+            return fallback_codes
+        
+        return codes  # Dernière solution: retourner les codes originaux
+
     except Exception as e:
         logger.error(f"Erreur lors de la validation des codes: {e}")
         return codes  # En cas d'erreur, conserver les codes originaux
@@ -316,6 +449,13 @@ def label_themes(client: Groq, model: str, clusters: Dict[int, List[Dict[str, An
     """
     theme_labels: Dict[int, str] = {}
     
+    # Exemple few-shot pour le labelling
+    examples = [
+        "Un usage stratégique et pédagogique de l'IA générative",
+        "Un rapport critique à la légitimité académique menant à des tensions éthiques",
+        "Une transformation du rapport au savoir et à l'écriture"
+    ]
+    
     for cluster_id, codes in clusters.items():
         # Extraire le texte des codes et les excerpts pour le contexte
         code_items = [{"code": c['code'], "excerpt": c['excerpt']} for c in codes]
@@ -325,6 +465,12 @@ def label_themes(client: Groq, model: str, clusters: Dict[int, List[Dict[str, An
             "Tu es un sociologue synthétisant des résultats d'analyse qualitative.\n\n"
             f"Voici un groupe de codes apparentés avec leurs extraits:\n{codes_json}\n\n"
             "Propose un titre de thème sociologique concis (2-4 mots) qui capture l'essence commune de ces codes.\n\n"
+            
+            "Voici des exemples de bons titres de thèmes sociologiques:\n"
+            f"- \"{examples[0]}\"\n"
+            f"- \"{examples[1]}\"\n"
+            f"- \"{examples[2]}\"\n\n"
+            
             "Réponds uniquement en JSON: {\"theme\": \"...\"}"
         )
         
@@ -380,13 +526,22 @@ def meta_cluster_themes(client: Groq, model: str, clusters: Dict[int, List[Dict[
         codes_text = "; ".join([f"{c['code']}: {c['excerpt']}" for c in codes[:3]])  # Limiter pour éviter trop de tokens
         theme_descriptions[cluster_id] = f"Thème '{theme_name}' avec codes: {codes_text}"
     
-    # Demander au LLM de regrouper les thèmes
+    # Demander au LLM de regrouper les thèmes avec exemples few-shot
     themes_json = json.dumps(theme_descriptions, ensure_ascii=False)
     prompt = (
         "Tu es un expert en sociologie chargé de regrouper des thèmes similaires.\n\n"
         f"Voici {len(theme_descriptions)} thèmes issus d'une analyse qualitative:\n{themes_json}\n\n"
         f"Regroupe ces thèmes en {target_count} méta-thèmes maximum. Chaque thème original doit être assigné "
         f"à un seul méta-thème plus large.\n\n"
+        
+        "Voici un exemple de regroupement thématique en sociologie du numérique:\n\n"
+        "- Méta-thème 1: \"Pratiques numériques et apprentissage\" pourrait inclure des thèmes comme "
+        "\"Usage pédagogique des outils\", \"Appropriation des technologies\" et \"Stratégies d'adaptation numérique\"\n\n"
+        "- Méta-thème 2: \"Tensions éthiques et normatives\" pourrait inclure des thèmes comme "
+        "\"Anxiété face aux règles\", \"Légitimité académique contestée\" et \"Stratégies de contournement\"\n\n"
+        "- Méta-thème 3: \"Transformation des processus cognitifs\" pourrait inclure des thèmes comme "
+        "\"Nouveau rapport à l'écriture\", \"Co-production du savoir\" et \"Évolution des compétences valorisées\"\n\n"
+        
         "Réponds uniquement en JSON avec le format suivant:\n"
         "{\"meta_themes\": {\"0\": \"Nom du méta-thème 1\", \"1\": \"Nom du méta-thème 2\", ...}, "
         "\"assignments\": {\"0\": 1, \"2\": 0, ...}}\n\n"
@@ -486,6 +641,11 @@ def compile_results_with_meta(all_codes: List[Dict[str, Any]],
     df = df.sort_values(['Méta-thème', 'Thème'])
     
     return df
+
+# -----------------------
+# Pipeline Orchestrateur
+# -----------------------
+
 
 # -----------------------
 # Pipeline Orchestrateur
